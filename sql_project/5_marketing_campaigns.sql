@@ -1,8 +1,7 @@
--- Question 5 : Are the marketing campaings boosting the numbers of orders placed during the specific weeks ? 
+-- Question 5 : Are the marketing campaigns boosting the numbers of orders placed during the specific weeks ? 
 
 -- Retrieving weeks of the years during wich a discount was effectively applied
-
-CREATE TEMPORARY TABLE discount_weeks (
+CREATE TEMPORARY TABLE discounted_weeks (
     SELECT
         YEAR(order_date) AS year,
         WEEK(order_date) AS week,
@@ -17,47 +16,45 @@ CREATE TEMPORARY TABLE discount_weeks (
     GROUP BY 1,2,3
 );
 
--- Comparing effective discount weeks with theoretical ones
 
+-- Comparing effective discounted weeks with theoretical ones
+
+-- Retrieving weeks in 'discounted_weeks' table not in 'marketing_campaings' table
 SELECT *
-FROM discount_weeks
-LEFT JOIN marketing_campaigns ON discount_weeks.week = marketing_campaigns.offer_week;
+FROM discounted_weeks
+LEFT JOIN marketing_campaigns ON discounted_weeks.week = marketing_campaigns.offer_week
+WHERE marketing_campaigns.offer_week IS NULL;
+
+-- Retrieving weeks in 'marketing_campaings' table not in 'discounted_weeks' table
+SELECT *
+FROM discounted_weeks
+RIGHT JOIN marketing_campaigns ON discounted_weeks.week = marketing_campaigns.offer_week
+WHERE discounted_weeks.week IS NULL;
+
 
 -- We notice some discrepencies between effective discounts applied and the theoretical discounts.
+-- Slight change in the initial question : Are the marketing campaigns boosting the numbers of orders placed per discounted day ?
 
--- Average number of orders placed during discount weeks vs normal weeks using effective discount weeks
+-- Average number of orders placed during discounted days vs normal days using effective data
+WITH discounted_days AS (
+    SELECT
+        DATE(order_date) AS order_date,
+        CASE WHEN discount > 0 THEN 'Yes' ELSE 'No' END AS discount
+    FROM order_item
+    LEFT JOIN orders ON order_item.order_id = orders.order_id
+    WHERE discount > 0
+    GROUP BY 1,2)
 
-SELECT 
+SELECT
     discount,
-    AVG(orders) AS avg_orders
+    AVG(count_orders) AS avg_orders
 FROM 
     (SELECT 
-        YEAR(order_date) AS year,
-        WEEK(order_date) AS week,
-        CASE WHEN discount = 'Yes' THEN 'Yes' ELSE 'No' END AS discount,
-        COUNT(DISTINCT order_id) AS orders
+        DATE(orders.order_date) AS order_date,
+        CASE WHEN discounted_days.discount = 'Yes' THEN 'Yes' ELSE 'No' END AS discount,
+        COUNT(DISTINCT order_id) AS count_orders
     FROM orders
-    LEFT JOIN discount_weeks ON YEAR(orders.order_date) = discount_weeks.year AND WEEK(orders.order_date) = discount_weeks.week
-    GROUP BY 1,2,3
-    ORDER BY orders DESC) AS orders_by_discount_week
+    LEFT JOIN discounted_days ON DATE(orders.order_date) = discounted_days.order_date
+    GROUP BY 1,2
+    ORDER BY count_orders DESC) AS orders_by_discounted_days
 GROUP BY discount;
-
--- Average number of orders placed during discount weeks vs normal weeks using theoretical discount weeks
-
-SELECT 
-    discount,
-    AVG(orders) AS avg_orders
-FROM 
-    (SELECT
-        YEAR(order_date) AS year,
-        WEEK(order_date) AS week,
-        CASE WHEN campaign_name IS NULL THEN 'No' ELSE 'Yes' END AS discount,
-        COUNT(DISTINCT order_id) AS orders
-    FROM orders
-    LEFT JOIN marketing_campaigns ON WEEK(orders.order_date) = marketing_campaigns.offer_week
-    GROUP BY 1,2,3
-    ORDER BY orders DESC) AS orders_by_discount_week
-GROUP BY discount;
-
--- Very similar results with both methods, it seems that the date doesn't really make sense
-

@@ -5,31 +5,21 @@
 
 -- But before checking the top categories, we can do a quick a check to see if there are any products that are not selling
 
-SELECT DISTINCT name
+SELECT name
 FROM product
-LEFT JOIN order_item on product.product_id = order_item.product_id
-WHERE order_item.product_id IS NULL;
+WHERE product_id NOT IN
+    (SELECT DISTINCT product_id
+     FROM order_item);
+
 
 -- Top categories in terms of percentage of the total sales
 
-WITH total_sales AS (
-SELECT 
-    order_item_id,
-    order_id,
-    product.product_id,
-    subtotal,
-    category.category_ID,
+SELECT
     category_name,
-    SUM(subtotal) OVER () AS total_sales
+    SUM(subtotal)/SUM(SUM(subtotal)) OVER() AS perc_of_total_sales
 FROM product
 LEFT JOIN order_item on product.product_id = order_item.product_id
 LEFT JOIN subcategory on product.subcategory_id = subcategory.subcategory_id
 LEFT JOIN category on subcategory.category_id = category.category_ID
-)
-
-SELECT 
-    category_name,
-    SUM(subtotal)/total_sales AS category_percentage
-FROM total_sales
-GROUP BY category_name, total_sales
-ORDER BY category_percentage DESC;
+GROUP BY category_name
+ORDER BY perc_of_total_sales DESC;

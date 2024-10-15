@@ -5,18 +5,23 @@
 SELECT DISTINCT reason
 FROM returns;
 
--- The supplier with the highest rates of return due to poor quality products
--- Assumption : we assume that the suppliers are not responsibles of the packing of the final orders, that's why we are not
--- including "Received wrong product" and "Color doesn't match" in the reasons below.
+-- The suppliers with the highest rates of return due to defective orders
 
+-- Extract the id's of the orders for which there is at least one defective item
+WITH defective_orders_id AS (
+    SELECT DISTINCT order_id
+    FROM returns
+    WHERE reason IN ("Received wrong product", "Color doesn't match", "Item not as described", "Product didn't meet expecations", "Defective product")
+)
+
+-- Retrieving the percentage of defective orders per supplier
 SELECT
     supplier_name,
-    COUNT(DISTINCT returns.order_id) AS defective_orders,
+    COUNT(DISTINCT defective_orders_id.order_id) AS defective_orders,
     COUNT(DISTINCT order_item.order_id) AS total_orders,
-    COUNT(DISTINCT returns.order_id)/COUNT(DISTINCT order_item.order_id) AS percentage_defective_orders
+    COUNT(DISTINCT defective_orders_id.order_id)/COUNT(DISTINCT order_item.order_id) AS perc_defective_orders
 FROM order_item
-LEFT JOIN returns ON returns.order_id = order_item.order_id AND returns.product_id = order_item.product_id
+LEFT JOIN defective_orders_id ON defective_orders_id.order_id = order_item.order_id
 LEFT JOIN supplier ON order_item.supplier_id = supplier.supplier_id
-WHERE reason IN ("Item not as described", "Product didn't meet expecations", "Defective product") OR reason IS NULL
 GROUP BY supplier_name
-ORDER BY percentage_defective_orders DESC;
+ORDER BY perc_defective_orders DESC;
